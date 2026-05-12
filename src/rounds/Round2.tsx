@@ -27,6 +27,7 @@ function HintButton2({ onReveal }: { onReveal: () => void }) {
 const IMAGE_CHALLENGES = [
   {
     id: 'img1',
+    src: '/img_scientist.png',
     description: 'A professional portrait of a scientist in a laboratory',
     artifacts: [
       { id: 'a1', region: 'Left ear', issue: 'Asymmetrical ear structure — different shapes', found: false },
@@ -38,6 +39,7 @@ const IMAGE_CHALLENGES = [
   },
   {
     id: 'img2',
+    src: '/img_cityscape.png',
     description: 'A sunset cityscape with modern architecture',
     artifacts: [
       { id: 'b1', region: 'Window reflections', issue: 'Inconsistent reflections — sky shows different time of day', found: false },
@@ -48,6 +50,7 @@ const IMAGE_CHALLENGES = [
   },
   {
     id: 'img3',
+    src: '/img_market.png',
     description: 'A photojournalistic shot of a street market',
     artifacts: [],
     isAI: false,
@@ -144,14 +147,19 @@ export function R2Step1() {
       <div className="border-2 border-white/10 bg-black/70 p-6 space-y-4">
         <div className="text-center">
           <div className="text-white/50 text-xs tracking-widest mb-2">SPECIMEN {currentImage + 1}</div>
-          {/* Simulated image with description */}
-          <div className="border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-8 md:p-12 min-h-[200px] flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_30%_40%,rgba(0,210,255,0.3),transparent_50%),radial-gradient(circle_at_70%_60%,rgba(0,255,157,0.2),transparent_50%)]" />
-            <div className="text-center relative z-10">
-              <div className="text-white/60 text-sm mb-2">📷</div>
-              <div className="text-white/80 text-lg font-bold mb-1">{img.description}</div>
-              <div className="text-white/30 text-xs">[High-resolution image — examine carefully]</div>
+          {/* Actual image display */}
+          <div className="border border-white/10 bg-black relative overflow-hidden group">
+            <img
+              src={img.src}
+              alt={img.description}
+              className="w-full h-auto max-h-[450px] object-contain mx-auto transition-transform duration-500 group-hover:scale-110 cursor-zoom-in"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+              <div className="text-white/60 text-xs tracking-widest">{img.description}</div>
             </div>
+            <div className="absolute top-2 right-2 text-[9px] text-white/30 bg-black/60 px-2 py-1 border border-white/10">HOVER TO ZOOM</div>
           </div>
         </div>
 
