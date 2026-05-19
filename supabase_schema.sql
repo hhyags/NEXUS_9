@@ -183,26 +183,53 @@ ALTER TABLE security_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event_replay ENABLE ROW LEVEL SECURITY;
 
 -- Allow anon access for the game (public event, no auth required)
+DROP POLICY IF EXISTS "Allow all for anon" ON teams;
 CREATE POLICY "Allow all for anon" ON teams FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON team_members;
 CREATE POLICY "Allow all for anon" ON team_members FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON rounds;
 CREATE POLICY "Allow all for anon" ON rounds FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON puzzle_attempts;
 CREATE POLICY "Allow all for anon" ON puzzle_attempts FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON hints_used;
 CREATE POLICY "Allow all for anon" ON hints_used FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON judge_scores;
 CREATE POLICY "Allow all for anon" ON judge_scores FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON final_submissions;
 CREATE POLICY "Allow all for anon" ON final_submissions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON session_state;
 CREATE POLICY "Allow all for anon" ON session_state FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON mission_logs;
 CREATE POLICY "Allow all for anon" ON mission_logs FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON security_logs;
 CREATE POLICY "Allow all for anon" ON security_logs FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for anon" ON event_replay;
 CREATE POLICY "Allow all for anon" ON event_replay FOR ALL USING (true) WITH CHECK (true);
 
 -- ============================================
 -- REALTIME PUBLICATIONS
 -- ============================================
-ALTER PUBLICATION supabase_realtime ADD TABLE teams;
-ALTER PUBLICATION supabase_realtime ADD TABLE judge_scores;
-ALTER PUBLICATION supabase_realtime ADD TABLE session_state;
-ALTER PUBLICATION supabase_realtime ADD TABLE mission_logs;
-ALTER PUBLICATION supabase_realtime ADD TABLE rounds;
-ALTER PUBLICATION supabase_realtime ADD TABLE final_submissions;
-ALTER PUBLICATION supabase_realtime ADD TABLE security_logs;
-ALTER PUBLICATION supabase_realtime ADD TABLE event_replay;
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY['teams', 'judge_scores', 'session_state', 'mission_logs', 'rounds', 'final_submissions', 'security_logs', 'event_replay']) LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables 
+      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = t
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %I;', t);
+    END IF;
+  END LOOP;
+END;
+$$;
