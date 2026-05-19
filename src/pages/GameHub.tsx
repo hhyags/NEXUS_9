@@ -11,9 +11,9 @@ import { R1Step1, R1Step2, R1Step3 } from '../rounds/Round1';
 import { R2Step1, R2Step2, R2Step3 } from '../rounds/Round2';
 import { R3Step1, R3Step2, R3Step3 } from '../rounds/Round3';
 import { FinalBoss } from '../rounds/FinalBoss';
-
+import { MissionSuccessScreen } from '../components/MissionSuccessScreen';
 export function GameHub() {
-  const { teamId, setTimerStatus, currentRound, currentStep, gameComplete, addLog, isOffline, setOffline, startRoundTimer } = useGameStore();
+  const { teamId, setTimerStatus, currentRound, currentStep, gameComplete, addLog, isOffline, setOffline, startRoundTimer, showMissionSuccess, setMissionSuccess } = useGameStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,6 +57,10 @@ export function GameHub() {
     }
     return null;
   };
+
+  if (showMissionSuccess) {
+    return <MissionSuccessScreen onComplete={() => { setMissionSuccess(false); navigate('/leaderboard'); }} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col relative overflow-hidden">

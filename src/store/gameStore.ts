@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { GLOBAL_TIMER_SECONDS, HINT_COSTS, HINTS_ALLOWED, STEPS_PER_ROUND } from '../config/gameConfig';
-import { cacheGameState, clearCache } from '../services/syncService';
-import type { MissionLog, TeamMember, ThreatLevel } from '../types';
+import { cacheGameState, clearCache, loadCachedState } from '../services/syncService';
+import type { MissionLog, TeamMember, ThreatLevel, SessionPhase, JudgeSession } from '../types';
 
 interface GameState {
   // Team
@@ -38,6 +38,16 @@ interface GameState {
   bossDefeated: boolean | null;
   isOffline: boolean;
 
+  // Session / Phase
+  sessionPhase: SessionPhase;
+  ceremonyTriggered: boolean;
+  showMissionSuccess: boolean;
+  announcement: string;
+  completionTime: number;
+
+  // Judge
+  judgeSession: JudgeSession | null;
+
   // Actions
   initTeam: (name: string, members: TeamMember[]) => Promise<void>;
   updateTimer: (time: number) => void;
@@ -60,6 +70,13 @@ interface GameState {
   startRoundTimer: () => void;
   setEfficiencyDropping: (dropping: boolean) => void;
   syncToSupabase: () => Promise<void>;
+  setSessionPhase: (phase: SessionPhase) => void;
+  setCeremonyTriggered: (triggered: boolean) => void;
+  setMissionSuccess: (show: boolean) => void;
+  setAnnouncement: (msg: string) => void;
+  setCompletionTime: (time: number) => void;
+  setJudgeSession: (session: JudgeSession | null) => void;
+  recoverState: () => void;
 }
 
 const initialState = {
@@ -86,6 +103,12 @@ const initialState = {
   gameComplete: false,
   bossDefeated: null as boolean | null,
   isOffline: false,
+  sessionPhase: 'lobby' as SessionPhase,
+  ceremonyTriggered: false,
+  showMissionSuccess: false,
+  announcement: '',
+  completionTime: 0,
+  judgeSession: null as JudgeSession | null,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -234,7 +257,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       ].slice(-50),
     })),
 
-  setBossResult: (defeated: boolean) => set({ bossDefeated: defeated, gameComplete: true }),
+  setBossResult: (defeated: boolean) => set({ bossDefeated: defeated, gameComplete: true, showMissionSuccess: true }),
 
   resetGame: () => {
     clearCache();
@@ -256,6 +279,46 @@ export const useGameStore = create<GameState>((set, get) => ({
   startRoundTimer: () => set({ roundStartTime: Date.now(), roundElapsed: 0 }),
   setEfficiencyDropping: (dropping: boolean) => set({ efficiencyDropping: dropping }),
 
+  // New phase/ceremony/mission actions
+  setSessionPhase: (phase: SessionPhase) => set({ sessionPhase: phase }),
+  setCeremonyTriggered: (triggered: boolean) => set({ ceremonyTriggered: triggered }),
+  setMissionSuccess: (show: boolean) => set({ showMissionSuccess: show }),
+  setAnnouncement: (msg: string) => set({ announcement: msg }),
+  setCompletionTime: (time: number) => set({ completionTime: time }),
+  setJudgeSession: (session: JudgeSession | null) => set({ judgeSession: session }),
+
+  /**
+   * Recover state from localStorage cache on reconnect/refresh.
+   */
+  recoverState: () => {
+    const cached = loadCachedState();
+    if (!cached || !cached.teamId) return;
+
+    set({
+      teamId: cached.teamId,
+      teamName: cached.teamName,
+      currentRound: cached.currentRound,
+      currentStep: cached.currentStep,
+      roundScores: cached.roundScores,
+      keysAcquired: cached.keysCollected,
+      totalHintsUsed: cached.hintsUsed,
+      globalTimeRemaining: cached.globalTimer,
+      roundStartTime: cached.roundStartTime,
+      totalScore: Math.min(100, cached.roundScores.reduce((a: number, b: number) => a + b, 0)),
+    });
+
+    // Recover judge session from localStorage
+    try {
+      const judgeRaw = localStorage.getItem('nexus9_judge_session');
+      if (judgeRaw) {
+        const judge = JSON.parse(judgeRaw) as JudgeSession;
+        set({ judgeSession: judge });
+      }
+    } catch {
+      // silent
+    }
+  },
+
   syncToSupabase: async () => {
     const state = get();
     if (!isSupabaseConfigured || !state.teamId || state.teamId.startsWith('local-')) return;
@@ -269,8 +332,23 @@ export const useGameStore = create<GameState>((set, get) => ({
           keys_collected: state.keysAcquired,
           hints_used: state.totalHintsUsed,
           round_scores: state.roundScores,
+          completion_time: state.completionTime,
         })
         .eq('id', state.teamId);
+
+      // Cache locally too
+      cacheGameState({
+        teamId: state.teamId,
+        teamName: state.teamName,
+        currentRound: state.currentRound,
+        currentStep: state.currentStep,
+        roundScores: state.roundScores,
+        keysCollected: state.keysAcquired,
+        hintsUsed: state.totalHintsUsed,
+        globalTimer: state.globalTimeRemaining,
+        roundStartTime: state.roundStartTime,
+        timestamp: Date.now(),
+      });
     } catch (err) {
       console.warn('[GameStore] Supabase sync failed:', err);
     }

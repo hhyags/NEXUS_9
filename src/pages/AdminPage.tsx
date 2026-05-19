@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { ADMIN_PASSWORD, ROUND_MAX_SCORES } from '../config/gameConfig';
 import { formatTimer } from '../services/timerService';
-import { triggerRestart, fetchAllTeams } from '../services/realtimeService';
+import { triggerRestart, fetchAllTeams, updateSessionPhase, broadcastAnnouncement, triggerCeremony } from '../services/realtimeService';
 import { clearCache } from '../services/syncService';
 import { RestartModal } from '../components/RestartModal';
+import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 
 export function AdminPage() {
   const [password, setPassword] = useState('');
   const [authed, setAuthed] = useState(false);
   const [showRestart, setShowRestart] = useState(false);
   const [teams, setTeams] = useState<any[]>([]);
+  const [announcementMsg, setAnnouncementMsg] = useState('');
   const store = useGameStore();
 
   useEffect(() => {
@@ -101,6 +103,32 @@ export function AdminPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Global Event Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Phase Control */}
+          <div className="border border-white/10 p-6 bg-black/30 space-y-4">
+            <h3 className="text-sm tracking-widest text-white/50">EVENT PHASE CONTROL</h3>
+            <div className="flex gap-2 text-xs">
+              <button onClick={() => updateSessionPhase('lobby')} className="px-3 py-2 border border-white/20 hover:border-neon-cyan">LOBBY</button>
+              <button onClick={() => updateSessionPhase('active')} className="px-3 py-2 border border-white/20 hover:border-neon-green">ACTIVE</button>
+              <button onClick={() => updateSessionPhase('judging')} className="px-3 py-2 border border-white/20 hover:border-warning-amber">JUDGING</button>
+              <button onClick={() => triggerCeremony()} className="px-3 py-2 border border-yellow-400 text-yellow-400 hover:bg-yellow-400/20 font-bold">TRIGGER CEREMONY</button>
+            </div>
+            <div className="pt-2">
+              <label className="text-[10px] text-white/30 block mb-1">BROADCAST ANNOUNCEMENT</label>
+              <div className="flex gap-2">
+                <input type="text" value={announcementMsg} onChange={e => setAnnouncementMsg(e.target.value)} placeholder="Enter global message..." className="flex-1 bg-black/50 border border-white/20 p-2 text-sm focus:border-neon-cyan outline-none" />
+                <button onClick={() => { broadcastAnnouncement(announcementMsg); setAnnouncementMsg(''); }} className="px-4 border border-neon-cyan text-neon-cyan hover:bg-neon-cyan hover:text-black">SEND</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Analytics Dashboard */}
+        <div className="pt-4">
+          <AnalyticsDashboard />
         </div>
 
         {/* All Teams */}

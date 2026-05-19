@@ -5,6 +5,8 @@ import {
   OVERTIME_PENALTY_PER_MINUTE,
   STEP_WEIGHTS,
 } from '../config/gameConfig';
+import type { CeremonyTeam, DbJudgeScore, EventSummary } from '../types';
+import { calculateJudgeAverage, calculateNormalizedJudgeScore, calculateFinalWeightedScore } from './judgeService';
 
 /**
  * Calculate dynamic score for a completed step within a round.
@@ -94,6 +96,118 @@ export function calculateTotalScore(roundScores: number[]): number {
  */
 export function getHintCost(round: number): number {
   return HINT_COSTS[round] || 0;
+}
+
+/**
+ * Calculate final weighted score for a team.
+ * finalScore = (gameScore * 0.7) + (normalizedJudgeScore * 0.3)
+ */
+export function calculateFinalScore(gameScore: number, judgeAverage: number): number {
+  const normalized = calculateNormalizedJudgeScore(judgeAverage);
+  return calculateFinalWeightedScore(gameScore, normalized);
+}
+
+/**
+ * Build sorted leaderboard from teams and judge scores.
+ * Sort: finalScore DESC → fastest completion → least hints used
+ */
+export function sortLeaderboard(
+  teams: Array<{ id: string; name: string; gameScore: number; completionTime: number; hintsUsed: number; [key: string]: unknown }>,
+  allJudgeScores: DbJudgeScore[]
+): CeremonyTeam[] {
+  return teams
+    .map((t) => {
+      const judgeAvg = calculateJudgeAverage(allJudgeScores, t.id);
+      const normalized = calculateNormalizedJudgeScore(judgeAvg);
+      const finalScore = calculateFinalWeightedScore(t.gameScore, normalized);
+      return {
+        id: t.id,
+        name: t.name,
+        gameScore: t.gameScore,
+        judgeAverage: judgeAvg,
+        normalizedJudgeScore: normalized,
+        finalScore,
+        completionTime: t.completionTime as number || 0,
+        roundsCleared: t.roundsCleared as number || 0,
+        hintsUsed: t.hintsUsed,
+        roundScores: t.roundScores as number[] || [0, 0, 0, 0],
+        membersCount: t.membersCount as number || 0,
+        status: t.status as string || 'active',
+      } satisfies CeremonyTeam;
+    })
+    .sort((a, b) => {
+      // 1. finalScore DESC
+      if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+      // 2. fastest completion (lower is better)
+      if (a.completionTime !== b.completionTime) return a.completionTime - b.completionTime;
+      // 3. least hints used
+      return a.hintsUsed - b.hintsUsed;
+    });
+}
+
+/**
+ * Compute overall event summary with averages and winner announcement.
+ */
+export function computeEventSummary(
+  teams: Array<{ id: string; name: string; gameScore: number; completionTime: number; hintsUsed: number; [key: string]: unknown }>,
+  allJudgeScores: DbJudgeScore[]
+): EventSummary {
+  if (teams.length === 0) {
+    return {
+      totalTeams: 0,
+      avgGameScore: 0,
+      avgJudgeScore: 0,
+      avgNormalizedJudge: 0,
+      avgFinalScore: 0,
+      highestGameScore: { teamName: '—', score: 0 },
+      highestJudgeScore: { teamName: '—', score: 0 },
+      winner: null,
+    };
+  }
+
+  const leaderboard = sortLeaderboard(teams, allJudgeScores);
+
+  let totalGame = 0;
+  let totalJudge = 0;
+  let totalNormalized = 0;
+  let totalFinal = 0;
+  let highGame = { teamName: '', score: 0 };
+  let highJudge = { teamName: '', score: 0 };
+
+  leaderboard.forEach((t) => {
+    totalGame += t.gameScore;
+    totalJudge += t.judgeAverage;
+    totalNormalized += t.normalizedJudgeScore;
+    totalFinal += t.finalScore;
+
+    if (t.gameScore > highGame.score) {
+      highGame = { teamName: t.name, score: t.gameScore };
+    }
+    if (t.judgeAverage > highJudge.score) {
+      highJudge = { teamName: t.name, score: t.judgeAverage };
+    }
+  });
+
+  const count = leaderboard.length;
+  const winner = leaderboard[0];
+
+  return {
+    totalTeams: count,
+    avgGameScore: Math.round((totalGame / count) * 100) / 100,
+    avgJudgeScore: Math.round((totalJudge / count) * 100) / 100,
+    avgNormalizedJudge: Math.round((totalNormalized / count) * 100) / 100,
+    avgFinalScore: Math.round((totalFinal / count) * 100) / 100,
+    highestGameScore: highGame,
+    highestJudgeScore: highJudge,
+    winner: winner
+      ? {
+          teamName: winner.name,
+          finalScore: winner.finalScore,
+          gameScore: winner.gameScore,
+          judgeAvg: winner.judgeAverage,
+        }
+      : null,
+  };
 }
 
 export interface ScoreBreakdown {

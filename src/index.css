@@ -161,3 +161,48 @@ input[type="range"]::-moz-range-thumb {
   animation: alarm-pulse 1s ease-in-out infinite;
   background: radial-gradient(circle at center, rgba(255,59,59,0.15), transparent 70%);
 }
+
+/* Cinematic Effects */
+.mission-success-bg {
+  background: radial-gradient(circle at center, rgba(0, 255, 157, 0.15) 0%, rgba(0, 0, 0, 0.8) 100%);
+}
+
+.holographic-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+  backdrop-filter: blur(10px);
+}
+
+.holographic-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.particle {
+  position: absolute;
+  filter: blur(1px);
+  animation: float-up infinite linear;
+}
+
+@keyframes float-up {
+  0% { transform: translateY(100vh) scale(0); opacity: 0; }
+  20% { opacity: 1; scale: 1; }
+  80% { opacity: 1; scale: 1; }
+  100% { transform: translateY(-20vh) scale(0); opacity: 0; }
+}

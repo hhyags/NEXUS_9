@@ -4,6 +4,9 @@ import { GameHub } from './pages/GameHub';
 import { LeaderboardPage } from './pages/LeaderboardPage';
 import { AdminPage } from './pages/AdminPage';
 import { JudgePage } from './pages/JudgePage';
+import { SpectatorPage } from './pages/SpectatorPage';
+import { WinnerCeremony } from './components/WinnerCeremony';
+import { FinalResults } from './components/FinalResults';
 
 function LandingPage() {
   const navigate = useNavigate();
@@ -37,6 +40,7 @@ function LandingPage() {
             <button onClick={() => navigate('/leaderboard')} className="px-4 py-2 border border-white/20 text-white/40 text-xs tracking-widest hover:text-white/70 hover:border-white/40 transition-all">LEADERBOARD</button>
             <button onClick={() => navigate('/admin')} className="px-4 py-2 border border-danger-red/20 text-danger-red/40 text-xs tracking-widest hover:text-danger-red/70 hover:border-danger-red/40 transition-all">ADMIN</button>
             <button onClick={() => navigate('/judge')} className="px-4 py-2 border border-neon-cyan/20 text-neon-cyan/40 text-xs tracking-widest hover:text-neon-cyan/70 hover:border-neon-cyan/40 transition-all">JUDGE</button>
+            <button onClick={() => navigate('/spectator')} className="px-4 py-2 border border-warning-amber/20 text-warning-amber/40 text-xs tracking-widest hover:text-warning-amber/70 hover:border-warning-amber/40 transition-all">SPECTATE</button>
           </div>
         </div>
       </div>
@@ -54,6 +58,9 @@ function App() {
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/judge" element={<JudgePage />} />
+        <Route path="/spectator" element={<SpectatorPage />} />
+        <Route path="/ceremony" element={<WinnerCeremony />} />
+        <Route path="/results" element={<FinalResults />} />
       </Routes>
     </BrowserRouter>
   );
