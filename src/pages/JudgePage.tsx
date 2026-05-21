@@ -28,7 +28,7 @@ export function JudgePage() {
   const [isLocked, setIsLocked] = useState(false);
   const [allJudgeScores, setAllJudgeScores] = useState<DbJudgeScore[]>([]);
   const channelsRef = useRef<any[]>([]);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Initialize and recover
   useEffect(() => {
