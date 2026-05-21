@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { ADMIN_PASSWORD, ROUND_MAX_SCORES } from '../config/gameConfig';
 import { formatTimer } from '../services/timerService';
-import { triggerRestart, fetchAllTeams, updateSessionPhase, broadcastAnnouncement, triggerCeremony } from '../services/realtimeService';
+import { triggerRestart, fetchAllTeams, updateSessionPhase, broadcastAnnouncement, triggerCeremony, deleteTeam } from '../services/realtimeService';
 import { clearCache } from '../services/syncService';
 import { RestartModal } from '../components/RestartModal';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
@@ -13,6 +13,8 @@ export function AdminPage() {
   const [showRestart, setShowRestart] = useState(false);
   const [teams, setTeams] = useState<any[]>([]);
   const [announcementMsg, setAnnouncementMsg] = useState('');
+  const [teamToDelete, setTeamToDelete] = useState<{id: string, name: string} | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const store = useGameStore();
 
   useEffect(() => {
@@ -34,6 +36,17 @@ export function AdminPage() {
     await triggerRestart();
     setShowRestart(false);
     window.location.href = '/';
+  };
+
+  const handleDeleteTeam = async () => {
+    if (!teamToDelete) return;
+    setDeleting(true);
+    const success = await deleteTeam(teamToDelete.id);
+    if (success) {
+      setTeams(teams.filter(t => t.id !== teamToDelete.id));
+    }
+    setDeleting(false);
+    setTeamToDelete(null);
   };
 
   if (!authed) {
@@ -142,7 +155,15 @@ export function AdminPage() {
                     <span className="text-neon-cyan font-bold">{t.team_name}</span>
                     <span className="text-white/30 ml-2">R{t.current_round} · {t.team_members?.length || 0} members</span>
                   </div>
-                  <div className="text-neon-green font-bold">{t.total_score}/100</div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-neon-green font-bold">{t.total_score}/100</div>
+                    <button
+                      onClick={() => setTeamToDelete({id: t.id, name: t.team_name})}
+                      className="px-3 py-1 border border-danger-red text-danger-red text-xs tracking-widest hover:bg-danger-red hover:text-black transition-all"
+                    >
+                      DELETE
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -151,6 +172,36 @@ export function AdminPage() {
       </div>
 
       {showRestart && <RestartModal onConfirm={handleRestart} onCancel={() => setShowRestart(false)} />}
+
+      {/* Delete Team Confirmation Modal */}
+      {teamToDelete && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-black border-2 border-danger-red p-8 max-w-md w-full space-y-6">
+            <h2 className="text-2xl tracking-widest text-danger-red text-center">CONFIRM DELETE</h2>
+            <div className="text-center text-white/70">
+              <p>Are you sure you want to delete team:</p>
+              <p className="text-neon-cyan font-bold mt-2 text-lg">{teamToDelete.name}</p>
+              <p className="text-danger-red text-sm mt-4">This action CANNOT be undone.</p>
+              <p className="text-danger-red text-sm">All team data will be permanently deleted.</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setTeamToDelete(null)}
+                className="flex-1 p-3 border border-white/20 text-white tracking-widest hover:border-white transition-all"
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleDeleteTeam}
+                disabled={deleting}
+                className="flex-1 p-3 border border-danger-red text-danger-red bg-danger-red/20 font-bold tracking-widest hover:bg-danger-red hover:text-black transition-all disabled:opacity-50"
+              >
+                {deleting ? 'DELETING...' : 'CONFIRM DELETE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

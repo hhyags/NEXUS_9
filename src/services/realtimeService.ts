@@ -21,6 +21,7 @@ export function subscribeToGameChanges(onUpdate: ChangeCallback): void {
         'postgres_changes',
         { event: '*', schema: 'public', table },
         (payload) => {
+          console.debug(`[RealtimeService] Game change in ${table}:`, payload.eventType);
           onUpdate({
             table,
             eventType: payload.eventType,
@@ -29,7 +30,9 @@ export function subscribeToGameChanges(onUpdate: ChangeCallback): void {
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.debug(`[RealtimeService] Subscription to ${table} - Status: ${status}`);
+      });
     channels.push(channel);
   });
 }
@@ -48,9 +51,19 @@ export function subscribeToTable(
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table },
-      callback as (payload: unknown) => void
+      (payload) => {
+        console.debug(`[RealtimeService] ${table} change detected:`, payload.eventType);
+        callback(payload as Record<string, unknown>);
+      }
     )
-    .subscribe();
+    .subscribe((status) => {
+      console.debug(`[RealtimeService] Subscription to ${table} - Status: ${status}`);
+      if (status === 'SUBSCRIBED') {
+        console.debug(`[RealtimeService] Successfully subscribed to ${table}`);
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error(`[RealtimeService] Failed to subscribe to ${table}`);
+      }
+    });
 
   channels.push(channel);
   return channel;
@@ -60,8 +73,13 @@ export function subscribeToTable(
  * Unsubscribe from a specific channel.
  */
 export function unsubscribeChannel(channel: RealtimeChannel): void {
-  supabase.removeChannel(channel);
-  channels = channels.filter((ch) => ch !== channel);
+  try {
+    supabase.removeChannel(channel);
+    channels = channels.filter((ch) => ch !== channel);
+    console.debug('[RealtimeService] Channel unsubscribed successfully');
+  } catch (err) {
+    console.error('[RealtimeService] Failed to unsubscribe channel:', err);
+  }
 }
 
 /**
@@ -337,5 +355,33 @@ export async function addMissionLog(
     });
   } catch (err) {
     console.warn('[RealtimeService] Failed to add mission log:', err);
+  }
+}
+
+/**
+ * Delete a team and all associated data.
+ */
+export async function deleteTeam(teamId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    // Delete related records first (cascading deletes may not be set up)
+    await supabase.from('team_members').delete().eq('team_id', teamId);
+    await supabase.from('judge_scores').delete().eq('team_id', teamId);
+    await supabase.from('final_submissions').delete().eq('team_id', teamId);
+    await supabase.from('mission_logs').delete().eq('team_id', teamId);
+    await supabase.from('puzzle_attempts').delete().eq('team_id', teamId);
+    await supabase.from('hints_used').delete().eq('team_id', teamId);
+    await supabase.from('rounds').delete().eq('team_id', teamId);
+    await supabase.from('security_logs').delete().eq('team_id', teamId);
+    
+    // Finally delete the team itself
+    const { error } = await supabase.from('teams').delete().eq('id', teamId);
+    if (error) throw error;
+    
+    console.debug('[RealtimeService] Team deleted:', teamId);
+    return true;
+  } catch (err) {
+    console.error('[RealtimeService] Failed to delete team:', err);
+    return false;
   }
 }

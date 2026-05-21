@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { saveJudgeScores, lockJudgeScore, fetchAllJudgeScores, getJudgeSubmissionCount } from '../services/judgeService';
-import { fetchAllTeams, subscribeToTable } from '../services/realtimeService';
+import { fetchAllTeams, subscribeToTable, unsubscribeChannel } from '../services/realtimeService';
 import { useGameStore } from '../store/gameStore';
 import { JudgeLoginModal } from '../components/JudgeLoginModal';
 import { TeamIntelPanel } from '../components/TeamIntelPanel';
@@ -27,6 +27,8 @@ export function JudgePage() {
   const [saved, setSaved] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [allJudgeScores, setAllJudgeScores] = useState<DbJudgeScore[]>([]);
+  const channelsRef = useRef<any[]>([]);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize and recover
   useEffect(() => {
@@ -36,25 +38,43 @@ export function JudgePage() {
   // Data fetching
   useEffect(() => {
     if (!judgeSession?.authenticated) return;
+    
     const load = async () => {
       const t = await fetchAllTeams();
       setTeams(t);
       const js = await fetchAllJudgeScores();
       setAllJudgeScores(js);
     };
+    
     load();
-    const interval = setInterval(load, 5000);
+    
+    // Faster polling to complement real-time (1 second for judge scoring)
+    pollIntervalRef.current = setInterval(load, 1000);
 
-    subscribeToTable('judge_scores', () => {
+    // Real-time subscriptions for judge_scores
+    const judgeScoresChannel = subscribeToTable('judge_scores', () => {
       fetchAllJudgeScores().then(setAllJudgeScores);
     });
-    subscribeToTable('teams', () => {
+    if (judgeScoresChannel) channelsRef.current.push(judgeScoresChannel);
+
+    // Real-time subscriptions for teams
+    const teamsChannel = subscribeToTable('teams', () => {
       fetchAllTeams().then(setTeams);
     });
+    if (teamsChannel) channelsRef.current.push(teamsChannel);
 
     return () => {
-      clearInterval(interval);
-      // channel cleanup handled by service
+      // Cleanup polling
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      
+      // Cleanup real-time subscriptions
+      channelsRef.current.forEach(channel => {
+        unsubscribeChannel(channel);
+      });
+      channelsRef.current = [];
     };
   }, [judgeSession]);
 
