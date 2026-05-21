@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { RestartModal } from './RestartModal';
 import { ROUND_EXPECTED_TIMES, ADMIN_PASSWORD } from '../config/gameConfig';
-import { formatTimer } from '../services/timerService';
+import { formatTimer, syncGlobalTimer } from '../services/timerService';
 import { triggerRestart } from '../services/realtimeService';
 import { clearCache } from '../services/syncService';
 import { Clock, AlertTriangle, Wifi, RotateCcw, TrendingDown } from 'lucide-react';
@@ -20,6 +20,13 @@ export function Header() {
   // Global timer countdown
   useEffect(() => {
     if (!isTimerRunning) return;
+
+    // Periodically sync back to Supabase every 5 seconds
+    if (globalTimeRemaining > 0 && globalTimeRemaining % 5 === 0) {
+      useGameStore.getState().syncToSupabase();
+      syncGlobalTimer(globalTimeRemaining);
+    }
+
     const interval = setInterval(() => {
       updateTimer(globalTimeRemaining - 1);
     }, 1000);

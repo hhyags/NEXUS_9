@@ -176,23 +176,23 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setRoundElapsed: (elapsed: number) => set({ roundElapsed: elapsed }),
 
-  addRoundScore: (round: number, points: number) =>
+  addRoundScore: (round: number, points: number) => {
     set((s) => {
       const newScores = [...s.roundScores];
       newScores[round - 1] = Math.round((newScores[round - 1] + points) * 100) / 100;
       const newTotal = Math.min(100, newScores.reduce((a, b) => a + b, 0));
       return { roundScores: newScores, totalScore: Math.round(newTotal * 100) / 100 };
-    }),
+    });
+    get().syncToSupabase();
+  },
 
-  acquireKey: () =>
+  acquireKey: () => {
     set((s) => {
       const newKeys = Math.min(s.keysAcquired + 1, 3);
-      // Sync to supabase
-      if (isSupabaseConfigured && s.teamId) {
-        supabase.from('teams').update({ keys_collected: newKeys }).eq('id', s.teamId).then();
-      }
       return { keysAcquired: newKeys };
-    }),
+    });
+    get().syncToSupabase();
+  },
 
   useHint: () => {
     const state = get();
@@ -222,16 +222,18 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     });
 
+    get().syncToSupabase();
     return { allowed: true, cost };
   },
 
-  advanceStep: () =>
+  advanceStep: () => {
     set((s) => {
       const maxSteps = STEPS_PER_ROUND[s.currentRound] || 3;
       if (s.currentStep >= maxSteps) {
         const nextRound = s.currentRound + 1;
         if (nextRound > 4) {
-          return { gameComplete: true };
+          const finalTime = GLOBAL_TIMER_SECONDS - s.globalTimeRemaining;
+          return { gameComplete: true, completionTime: finalTime };
         }
         return {
           currentRound: nextRound,
@@ -242,7 +244,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         };
       }
       return { currentStep: s.currentStep + 1 };
-    }),
+    });
+    get().syncToSupabase();
+  },
 
   setTimerStatus: (isRunning: boolean) => set({ isTimerRunning: isRunning }),
 
@@ -257,24 +261,45 @@ export const useGameStore = create<GameState>((set, get) => ({
       ].slice(-50),
     })),
 
-  setBossResult: (defeated: boolean) => set({ bossDefeated: defeated, gameComplete: true, showMissionSuccess: true }),
+  setBossResult: (defeated: boolean) => {
+    const state = get();
+    const finalTime = GLOBAL_TIMER_SECONDS - state.globalTimeRemaining;
+    set({
+      bossDefeated: defeated,
+      gameComplete: true,
+      showMissionSuccess: true,
+      completionTime: finalTime,
+    });
+    get().syncToSupabase();
+  },
 
   resetGame: () => {
     clearCache();
     set({ ...initialState, missionLogs: [] });
   },
 
-  setRound: (round: number) =>
+  setRound: (round: number) => {
     set({
       currentRound: round,
       currentStep: 1,
       roundStartTime: Date.now(),
       roundElapsed: 0,
       efficiencyDropping: false,
-    }),
-  setStep: (step: number) => set({ currentStep: step }),
-  setScore: (score: number) => set({ totalScore: score }),
-  setKeys: (keys: number) => set({ keysAcquired: keys }),
+    });
+    get().syncToSupabase();
+  },
+  setStep: (step: number) => {
+    set({ currentStep: step });
+    get().syncToSupabase();
+  },
+  setScore: (score: number) => {
+    set({ totalScore: score });
+    get().syncToSupabase();
+  },
+  setKeys: (keys: number) => {
+    set({ keysAcquired: keys });
+    get().syncToSupabase();
+  },
   setOffline: (offline: boolean) => set({ isOffline: offline }),
   startRoundTimer: () => set({ roundStartTime: Date.now(), roundElapsed: 0 }),
   setEfficiencyDropping: (dropping: boolean) => set({ efficiencyDropping: dropping }),
@@ -284,7 +309,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   setCeremonyTriggered: (triggered: boolean) => set({ ceremonyTriggered: triggered }),
   setMissionSuccess: (show: boolean) => set({ showMissionSuccess: show }),
   setAnnouncement: (msg: string) => set({ announcement: msg }),
-  setCompletionTime: (time: number) => set({ completionTime: time }),
+  setCompletionTime: (time: number) => {
+    set({ completionTime: time });
+    get().syncToSupabase();
+  },
   setJudgeSession: (session: JudgeSession | null) => set({ judgeSession: session }),
 
   /**
@@ -322,6 +350,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   syncToSupabase: async () => {
     const state = get();
     if (!isSupabaseConfigured || !state.teamId || state.teamId.startsWith('local-')) return;
+
+    // Calculate elapsed time (time taken so far) if not already gameComplete
+    const elapsed = state.gameComplete && state.completionTime > 0
+      ? state.completionTime
+      : Math.max(0, GLOBAL_TIMER_SECONDS - state.globalTimeRemaining);
+
     try {
       await supabase
         .from('teams')
@@ -332,7 +366,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           keys_collected: state.keysAcquired,
           hints_used: state.totalHintsUsed,
           round_scores: state.roundScores,
-          completion_time: state.completionTime,
+          completion_time: elapsed,
+          status: state.gameComplete ? 'completed' : 'active',
         })
         .eq('id', state.teamId);
 
